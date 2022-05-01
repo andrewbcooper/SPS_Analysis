@@ -11,11 +11,62 @@ load('ForApp.RData')
 
 PrettyPercent <- function(x) {paste0(round(100*x),"%")}
 
+myimpactmetric = c(
+  "CumPer",
+  "TimeShift"
+)
+
+names(myimpactmetric) = c(
+  "% of Households Leaving to Work",
+  "Change in Start Time relative to Current Start Time"
+)
+
+mychoices = c(
+  "FRPL" ,                                            
+  "American.Indian/.Alaskan.Native",                           
+  "Asian",                                              
+  "Black/.African.American",                                      
+  "Hispanic/.Latino.of.any.race(s)",                              
+  "Native.Hawaiian/.Other.Pacific.Islander",                      
+  "Two.or.More.Races",                                            
+  "White",             
+  "English.Language.Learners",                                    
+  "Highly.Capable",                                               
+  "Homeless",                                                     
+  "Low-Income",                                                   
+  "Migrant",                                                      
+  "Military.Parent",                                              
+  "Mobile",                                                       
+  "Section.504",                                                  
+  "Students.with.Disabilities")                                   
+
+names(mychoices) <- c(
+  "% Free or Reduced Paid Lunch" ,                                            
+  "% American Indian/Alaskan Native",                           
+  "% Asian",                                              
+  "% Black/African American",                                      
+  "% Hispanic/Latino of any race(s)",                              
+  "% Native Hawaiian/ Other Pacific Islander",                      
+  "% Two or More Races",                                            
+  "% White",             
+  "% English Language Learners",                                    
+  "% Highly Capable",                                               
+  "% Homeless",                                                     
+  "% Low-Income",                                                   
+  "% Migrant",                                                      
+  "% Military Parent",                                              
+  "% Mobile",                                                       
+  "% Section 504",                                                  
+  "% Students with Disabilities")
+
+
 # Define server logic 
 server <- function(input, output,session) {
   
   session <- sessionInfo()
   version <- paste0(session$R.version$major,".",session$R.version$minor)
+  
+  
   
   SummaryData <- reactive({MyData %>% filter(Name %in% input$school_name) %>% ungroup() %>%
     group_by(LeaveDT) %>%
@@ -58,14 +109,43 @@ server <- function(input, output,session) {
       `3.Year.Average.for.2020-21.Eligibility` = sum(Total.Students*`3.Year.Average.for.2020-21.Eligibility`)/sum(Total.Students),
       `Preliminary.High.Poverty.Eligibility.for.SY.2020-21` = sum(Total.Students*ifelse(`Preliminary.High.Poverty.Eligibility.for.SY.2020-21`=='Yes',1,0))/sum(Total.Students),
       Title1 = sum(Total.Students*ifelse(Title1 == "No",0,1))/sum(Total.Students),
-      ProposedStart.agg = as.POSIXct("2022-04-26 00:00:00", tz="GMT") + dhours(sum(Total.Students*(hour(ProposedStart) + minute(ProposedStart)/60))/sum(Total.Students))
+      ProposedStart.agg = as.POSIXct("2022-04-26 00:00:00", tz="GMT") + dhours(sum(Total.Students*(hour(ProposedStart) + minute(ProposedStart)/60))/sum(Total.Students)),
+      CurrentStart.agg = as.POSIXct("2022-04-26 00:00:00", tz="GMT") + dhours(sum(Total.Students*(hour(CurrentStartTime) + minute(CurrentStartTime)/60))/sum(Total.Students)),
+      TimeShift.agg = sum(Total.Students*TimeShift)/sum(Total.Students)
+      
+      
+      
     ) %>%
     arrange(LeaveDT) %>%
     mutate(CumPer = cumsum(Percent),
-           FRPL = `3.Year.Average.for.2020-21.Eligibility`)
-  
-
+           FRPL = `3.Year.Average.for.2020-21.Eligibility`
+           ) %>%
+    mutate(Equity_var = case_when(
+      input$equity_var == "FRPL" ~ get(input$equity_var),
+      TRUE ~ get(input$equity_var)/Total.Students.Agg ),
+      Impact_var = case_when(
+        input$impact_metric == "CumPer" ~ CumPer,
+        TRUE~ TimeShift.agg
+      )
+      )
   })
+  
+  EquityData <- reactive({Equity %>% 
+      mutate(Equity_var = case_when(
+        input$equity_var == "FRPL" ~ get(input$equity_var),
+        TRUE ~ get(input$equity_var)/Total.Students ),
+        Impact_var = get(input$impact_metric))
+        })
+  
+  EquityLabel = reactive({names(mychoices[which(mychoices==input$equity_var)])})
+  
+  EquityImpact_label = reactive({
+    ifelse(input$impact_metric == "CumPer","% of Households in Census Tract\nleaving at least 30 minutes before proposed school start time",
+           "Magnitude of Time Shift (minutes)\nNegative values = proposed is earlier than current")
+    })
+  EquityImpact_scale = reactive({
+  ifelse(input$impact_metric == "CumPer",scales::percent_format(),scales::number_format())
+})
   
   output$myGraph <- renderPlot({
     SummaryData() %>% ggplot(aes(x=LeaveDT,y=CumPer)) +
@@ -77,8 +157,11 @@ server <- function(input, output,session) {
       geom_vline(aes(xintercept=as.POSIXct("2022-04-26 09:30:00", tz="GMT")),color='darkgrey',linetype='dashed',size=1)+
       
       geom_vline(aes(xintercept=ProposedStart.agg[1]),color='red',linetype='dashed',size=1) +
+      geom_vline(aes(xintercept=CurrentStart.agg[1]),color='blue',linetype='solid',size=1) +
       
       annotate("text",label="Proposed\nStart\nTime",x=SummaryData()$ProposedStart.agg[1]+minutes(5),y=.15,hjust="left",color='red',size=5) + 
+      annotate("text",label="Current\nStart\nTime",x=SummaryData()$CurrentStart.agg[1]+minutes(5),y=.5,hjust="left",color='blue',size=5) + 
+      
       scale_y_continuous(name=paste0("% of Households in Census Tract\nLeaving to Work Before X"),labels=scales::percent_format()) +
       scale_x_datetime(name="",date_labels = "%l:%M", date_breaks = '2 hour', limits = c(as.POSIXct("2022-04-26 04:00:00", tz="GMT"),as.POSIXct("2022-04-26 12:00:00", tz="GMT"))) +
       ggtitle(str_wrap(paste(
@@ -87,54 +170,76 @@ server <- function(input, output,session) {
       theme_bw() + theme(text = element_text(size = 20))
   })
   
+  
   output$equityGraph <- renderPlot({
-    Equity %>% ggplot(aes(x=FRPL,y=CumPer,color=HighPoverty)) + geom_point(size=4) + 
-      geom_point(data = subset(Equity,Equity$Name %in% input$school_name),aes(x=FRPL,y=CumPer,fill=HighPoverty),color="black",size=8,shape=24) +
+    EquityData() %>% 
+      ggplot(aes(x=Equity_var,y=Impact_var,color=HighPoverty)) + geom_point(size=4) + 
+      geom_point(data = subset(EquityData(),Equity$Name %in% input$school_name),aes(x=Equity_var,y=Impact_var,fill=HighPoverty),color="black",size=8,shape=24) +
       facet_grid(~Type) +
-      scale_x_continuous(name="3-year-average % of students receiving Free or Reduced Paid Lunch",labels=scales::percent_format()) +
-      scale_y_continuous(name = "% of Households in Census Tract\nleaving at least 30 minutes before proposed school start time",labels=scales::percent_format()) +
+      scale_x_continuous(name=EquityLabel(),labels=scales::percent_format()) +
+      
+      # Change Scales with impact
+      scale_y_continuous(name = EquityImpact_label(),labels=EquityImpact_scale()) +
+      
       scale_color_manual(name = "Preliminary High\nPoverty Eligibility\nfor SY 2020-21",values=c('No' = 'black',"Yes"='red')) +
       scale_fill_manual(name = "Preliminary High\nPoverty Eligibility\nfor SY 2020-21",values=c('No' = 'black',"Yes"='red'),guide="none") +
       
-      theme_bw() + theme(text = element_text(size = 20)) 
+      theme_bw() + theme(text = element_text(size = 15)) 
   })
+  
+  
+  # For the Main page click
   output$click_info <- renderTable({
     silly <- nearPoints(SummaryData(),input$plot_click,threshold = 20) %>% 
       mutate(NameAgg = paste0(
         stri_replace_all_regex(str=input$school_name,pattern=c(" School"," International"),replacement = c("",""),vectorize=FALSE),
         collapse = ","),
+        ProposedSTF = format(ProposedStart.agg,'%I:%M'),
+        CurrentSTF = format(CurrentStart.agg,'%I:%M'),
         LeaveDTF = format(LeaveDT,'%I:%M'),
-        CumPerF = PrettyPercent(CumPer)
-        ) %>% select(NameAgg,LeaveDTF,CumPerF)
-     names(silly) <- c("School","Selected Time","Percent of Households Leaving before Selected Time")
+        CumPerF = PrettyPercent(CumPer),
+        TimeShiftF = round(TimeShift.agg)
+        ) %>% select(NameAgg,CurrentSTF,ProposedSTF,TimeShiftF,LeaveDTF,CumPerF)
+     names(silly) <- c("School","Current Start Time","Proposed Start Time","Magnitude of Shift (minutes)","Selected Time","Percent of Households Leaving before Selected Time")
     silly
   })
   
+  
+  # For the Equity Clicks and brush
   output$click_info2 <- renderTable({
     
-    Equity2 <- Equity %>% mutate(
+    # This is for the clicking and brushing
+    Equity2 <- EquityData() %>% mutate(
+      CurrentStartF = format(CurrentStartTime,'%I:%M'),
       ProposedStartF = format(ProposedStart, '%I:%M'),
-      FRPLFormat = PrettyPercent(FRPL),
+      TimeShiftF = round(TimeShift),
+      XAxisFormat = PrettyPercent(Equity_var),
       CumPerF = PrettyPercent(CumPer)
     )
     
+    # This is just for the aggregate group not for click or brush
     Summary2 <- SummaryData()[max(which(SummaryData()$LeaveDT <=  SummaryData()$ProposedStart.agg - minutes(30))),] %>% 
       mutate(
       NameAgg = paste0(
       stri_replace_all_regex(str=input$school_name,pattern=c(" School"," International"),replacement = c("",""),vectorize=FALSE),
       collapse = ","),
+      CurrentStartF = format(CurrentStart.agg,'%I:%M'),
       ProposedStartF = format(ProposedStart.agg, '%I:%M'),
-      FRPLFormat = PrettyPercent(FRPL),
+      TimeShiftF = round(TimeShift.agg),
+      XAxisFormat = PrettyPercent(Equity_var),
       CumPerF = PrettyPercent(CumPer),
-      HighPoverty = PrettyPercent(`Preliminary.High.Poverty.Eligibility.for.SY.2020-21`)
+      HighPoverty = case_when(
+        `Preliminary.High.Poverty.Eligibility.for.SY.2020-21` == 0 ~ "No",
+        `Preliminary.High.Poverty.Eligibility.for.SY.2020-21` == 1 ~ "Yes",
+        TRUE~PrettyPercent(`Preliminary.High.Poverty.Eligibility.for.SY.2020-21`))
     )
     
-    silly0 <- Summary2 %>% select(Name = NameAgg,ProposedStartF,FRPLFormat,CumPerF,HighPoverty)
-    silly1 <- nearPoints(Equity2,input$plot_click2) %>% select(Name,ProposedStartF,FRPLFormat,CumPerF,HighPoverty)
-    silly2 <- brushedPoints(Equity2,input$plot_brush) %>% select(Name,ProposedStartF,FRPLFormat,CumPerF,HighPoverty)
+    silly0 <- Summary2 %>% select(Name = NameAgg,CurrentStartF,ProposedStartF,XAxisFormat,TimeShiftF,CumPerF,HighPoverty)
+    silly1 <- nearPoints(Equity2,input$plot_click2) %>% select(Name,CurrentStartF,ProposedStartF,XAxisFormat,TimeShiftF,CumPerF,HighPoverty)
+    silly2 <- brushedPoints(Equity2,input$plot_brush) %>% select(Name,CurrentStartF,ProposedStartF,XAxisFormat,TimeShiftF,CumPerF,HighPoverty)
     silly <- rbind(silly0,silly1,silly2)
     
-    names(silly) <- c("School","Proposed Start Time","% of Students Receiving FRPL","% of Households Leaving at least 30 minutes before Proposed School Start Time","Preliminary High Poverty Eligibility")
+    names(silly) <- c("School","Current Start Time","Proposed Start Time",EquityLabel(),"Magnitude of Shift (minutes)","% of Households Leaving at least 30 minutes before Proposed School Start Time","Preliminary High Poverty Eligibility")
     
     silly
   })
@@ -150,32 +255,51 @@ ui <- fluidPage(
   sidebarLayout(
     sidebarPanel(
       
-      h4("This tool compares the proposed SPS start times to data from US Census Bureau's 2016-2020 American Community Survey (ACS) on the percent of households departing for work by certain times
-         and to the Washington Office of Superientendent of Public Instruction's (OSPI) data on percent of students receiving Free or Reduce Paid Lunch."),
+      h5("This tool compares the proposed SPS start times to data from US Census Bureau's 2016-2020 American Community Survey (ACS) on the percent of households departing for work by certain times
+         and to student demographic data from the Washington Office of Superientendent of Public Instruction's (OSPI)."),
       
-      h2("Full Data Tab:"),
+      h4("Full Data Tab:"),
       
-      h5("The table in the upper-left shows the percentage of households leaving for work by 7am, 8am, and 9am, grouped by the type of school"),
-      h5("The table in the upper-right shows the percentage of households leaving for work by 7am, 8am, and 9am, grouped by the type of school and the proposed start time for those schools. 
+      h6("The table in the upper-left shows the percentage of households leaving for work by 7am, 8am, and 9am, grouped by the type of school"),
+      h6("The table in the upper-right shows the percentage of households leaving for work by 7am, 8am, and 9am, grouped by the type of school and the proposed start time for those schools. 
          The final column shows the number of schools included in each group.  
          Highlighted cells represent the percent of households that would have to leave for work 30-minutes prior to the proposed school start time."
          ),
       
-      h5('The plot shows the full range of data available in the ACS for each school along with the proposed start time (in red) and the alternative start times (in grey).
+      h6('The plot shows the full range of data available in the ACS for each school along with the proposed start time (in red) and the alternative start times (in grey).
+         When more than 1 school is selected, the Proposed Start Time is the average proposed start time of the selected schools, weighted by the number of students in those schools.
          The specific values for each point along the line can be observed by clicking on that point.'),
       
-      h2("Equity Analysis Tab:"),
+      h4("Equity Analysis Tab:"),
       
-      h5("This figure links the full data to OSPI's data on percent of students receiving Free or Reduced Paid Lunch (FRPL).
-         Included in this data is OSPI's preliminary determination whether the school is eligible for 'High Poverty LAP Funding' for the 2020-21 school year.
-         The school selected in the drop-down, below, will appear as a triangle in the plot"),
+      h6("This figure links the full data to student demographic data from OSPI. Use the drop-down, below, to select the specific 
+      equity variable / metric. Variable / metric names are taken directly from the Report Card Enrollment data cited below. 
+      The color of the dots represents OSPI's preliminary determination whether the school is eligible for 'High Poverty LAP Funding' for the 2020-21 school year.
+      The school(s) selected in the drop-down, below, will appear as triangles in the plot"),
       
-      h5("Users can click on single points or click-and-drag multiple points to get more information about the specific schools"),
+      h6("Users can click on single points or click-and-drag multiple points to get more information about the specific schools.
+         The weighted-average values for the schools selected in the drop-down are automatically displayed."),
       
       br(),
       pickerInput("school_name", "Select a school",
                   AllSchools,
                   multiple=TRUE,selected=AllSchools[1],
+                  options = pickerOptions(
+                    title = 'Click to see options'
+                  )
+      ),
+      
+      pickerInput("impact_metric", "How to measure impact",
+                  myimpactmetric,
+                  multiple=FALSE,selected=myimpactmetric[1],
+                  options = pickerOptions(
+                    title = 'Click to see options'
+                  )
+      ),
+      
+      pickerInput("equity_var", "Select an Equity Measure for Equity Analysis",
+                  mychoices,
+                  multiple=FALSE,selected='FRPL',
                   options = pickerOptions(
                     title = 'Click to see options'
                   )
@@ -186,9 +310,14 @@ ui <- fluidPage(
          More information on the ACS can be found at <a href='https://www.census.gov/programs-surveys/acs'>the ACS web page</a>.  
            School start times were taken from the <a href='https://www.seattleschools.org/resources/bell-schedules/bell-time-changes/'>SPS Bell Time Changes web page</a>.
            OSPI data on FRPL can be found through their <a href='https://www.k12.wa.us/data-reporting/data-portal'>Data Portal</a> or the data can be downloaded directly 
-           via <a href='https://www.k12.wa.us/sites/default/files/public/safs/misc/budprep20/PovertyPercentageMar31.xlsx'>Poverty Percentages for the 2020–21 School Year - By District for LAP and By School for Additional High Poverty LAP Funding</a>"),
+           via <a href='https://www.k12.wa.us/sites/default/files/public/safs/misc/budprep20/PovertyPercentageMar31.xlsx'>Poverty Percentages for the 2020–21 School Year - By District for LAP and By School for Additional High Poverty LAP Funding</a>.
+           Other student demographic data was obtained through <a href='https://data.wa.gov/education/Report-Card-Enrollment-2021-22-School-Year/ymi4-syjv?fbclid=IwAR3WbEewtYX9BEyY8u6IeAdx697zN7ZnHjSQAcmnR6sH4--LmOZg2CpSb6o'>
+           The Report Card Enrollment 2021-22 School Year</a>"),
       br(),
-      HTML("Please direct questions, comments, and suggestions to <a href='mailto:acooper@alumni.washington.edu'>Andy Cooper</a>")
+      br(),
+      HTML("Please direct questions, comments, and suggestions to <a href='mailto:acooper@alumni.washington.edu'>Andy Cooper</a>"),
+      HTML("Data and code can be found at <a href='https://github.com/andrewbcooper/SPS_Analysis'>Andy's GitHub Page</a>.")
+      
       
     
    
