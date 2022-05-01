@@ -146,7 +146,9 @@ server <- function(input, output,session) {
   EquityImpact_scale = reactive({
   ifelse(input$impact_metric == "CumPer",scales::percent_format(),scales::number_format())
 })
-  
+  EquityLine = reactive({
+    ifelse(input$impact_metric == "TimeShift",1,0)
+  })
   output$myGraph <- renderPlot({
     SummaryData() %>% ggplot(aes(x=LeaveDT,y=CumPer)) +
       geom_path(size = 1.5) +
@@ -177,8 +179,7 @@ server <- function(input, output,session) {
       geom_point(data = subset(EquityData(),Equity$Name %in% input$school_name),aes(x=Equity_var,y=Impact_var,fill=HighPoverty),color="black",size=8,shape=24) +
       facet_grid(~Type) +
       scale_x_continuous(name=EquityLabel(),labels=scales::percent_format()) +
-      
-      # Change Scales with impact
+      geom_hline(aes(yintercept=0), color="darkgrey",linetype="dashed",alpha=EquityLine())+
       scale_y_continuous(name = EquityImpact_label(),labels=EquityImpact_scale()) +
       
       scale_color_manual(name = "Preliminary High\nPoverty Eligibility\nfor SY 2020-21",values=c('No' = 'black',"Yes"='red')) +
@@ -256,7 +257,9 @@ ui <- fluidPage(
     sidebarPanel(
       
       h5("This tool compares the proposed SPS start times to data from US Census Bureau's 2016-2020 American Community Survey (ACS) on the percent of households departing for work by certain times
-         and to student demographic data from the Washington Office of Superientendent of Public Instruction's (OSPI)."),
+         and to student demographic data from the Washington Office of Superientendent of Public Instruction's (OSPI). The impact of the propsed start times are measured in two ways: 
+         (1) The % of households departing for work prior to the propsed start time; and (2) the magnatidue of the change from the current start time to the proposed start time, measured in minutes.
+         Negative values for the magnitude of change mean the proposed start time is earlier than the current start time.  Positive values mean the proposed start time is later than the current start time."),
       
       h4("Full Data Tab:"),
       
@@ -266,16 +269,16 @@ ui <- fluidPage(
          Highlighted cells represent the percent of households that would have to leave for work 30-minutes prior to the proposed school start time."
          ),
       
-      h6('The plot shows the full range of data available in the ACS for each school along with the proposed start time (in red) and the alternative start times (in grey).
-         When more than 1 school is selected, the Proposed Start Time is the average proposed start time of the selected schools, weighted by the number of students in those schools.
+      h6('The plot shows the full range of data available in the ACS for each school along with the current start time (in blue), proposed start time (in red), and the alternative start times (in grey).
+         When more than 1 school is selected, the Current and Proposed Start Times are the average current or proposed start times of the selected schools, weighted by the number of students in those schools.
          The specific values for each point along the line can be observed by clicking on that point.'),
       
       h4("Equity Analysis Tab:"),
       
-      h6("This figure links the full data to student demographic data from OSPI. Use the drop-down, below, to select the specific 
-      equity variable / metric. Variable / metric names are taken directly from the Report Card Enrollment data cited below. 
+      h6("This plot shows how schools compare to one another based on the ACS and OSPI data. Use the drop-down, below, to select how you want to measure the impact of the proposed change. 
+      Use the other drop-down, to select the specific equity variable / metric upon which to base the comparisons. Variable / metric names are taken directly from the OSPI's Report Card Enrollment data cited below. 
       The color of the dots represents OSPI's preliminary determination whether the school is eligible for 'High Poverty LAP Funding' for the 2020-21 school year.
-      The school(s) selected in the drop-down, below, will appear as triangles in the plot"),
+      The school(s) selected in the drop-down will appear as triangles in the plot"),
       
       h6("Users can click on single points or click-and-drag multiple points to get more information about the specific schools.
          The weighted-average values for the schools selected in the drop-down are automatically displayed."),
