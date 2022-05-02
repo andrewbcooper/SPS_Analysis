@@ -309,13 +309,14 @@ ui <- fluidPage(
       ),
 
       hr(),
-      HTML("The ACS data is linked to the Census Tract in which the school is located and may not represent all families with students attending that school.  
+      HTML("For non-option schools, the ACS data is linked to the Census Block Groups that lie within school's attendance area boundaries.  
+      For option schools, the ACS data is linked to those Census Block Groups within a 2-mile drive of the school. In both cases, ACS data may not represent all families with students attending that school.  
          More information on the ACS can be found at <a href='https://www.census.gov/programs-surveys/acs'>the ACS web page</a>.  
            School start times were taken from the <a href='https://www.seattleschools.org/resources/bell-schedules/bell-time-changes/'>SPS Bell Time Changes web page</a>.
            OSPI data on FRPL can be found through their <a href='https://www.k12.wa.us/data-reporting/data-portal'>Data Portal</a> or the data can be downloaded directly 
            via <a href='https://www.k12.wa.us/sites/default/files/public/safs/misc/budprep20/PovertyPercentageMar31.xlsx'>Poverty Percentages for the 2020–21 School Year - By District for LAP and By School for Additional High Poverty LAP Funding</a>.
            Other student demographic data was obtained through <a href='https://data.wa.gov/education/Report-Card-Enrollment-2021-22-School-Year/ymi4-syjv?fbclid=IwAR3WbEewtYX9BEyY8u6IeAdx697zN7ZnHjSQAcmnR6sH4--LmOZg2CpSb6o'>
-           The Report Card Enrollment 2021-22 School Year</a>"),
+           The Report Card Enrollment 2021-22 School Year</a>. School Attendance Boundaries for the 2021-22 School Year were obtained from <a href='https://www.seattleschools.org/departments/enrollment-planning/enrollment-data/maps/'>Seattle Public Schools<a/>."),
       br(),
       br(),
       HTML("Please direct questions, comments, and suggestions to <a href='mailto:acooper@alumni.washington.edu'>Andy Cooper</a>"),
