@@ -250,7 +250,7 @@ server <- function(input, output,session) {
   
 }
 
-# Define UI for application that draws a histogram
+# Define UI for application
 ui <- fluidPage(
   titlePanel('SPS Start Times Exploration Tool'),
   sidebarLayout(
