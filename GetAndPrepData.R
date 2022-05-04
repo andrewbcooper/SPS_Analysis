@@ -35,7 +35,7 @@ names(SPSStartTimes) <- gsub(" ",".",names(SPSStartTimes))
 SPSStartTimes <- SPSStartTimes %>% mutate(Title1 = ifelse(is.na(Title.I.School.Wide)==TRUE,'No',Title.I.School.Wide),
          Type = ordered(Type,levels=c("Elementary School","K-8","Middle School","High School")),
          ProposedStart = case_when(
-           Start == "7:30 a.m." ~ as.POSIXct("2022-04-26 07:30:00", tz="GMT"),
+           Start == "7:40 a.m." ~ as.POSIXct("2022-04-26 07:40:00", tz="GMT"),
            Start == '8:30 a.m.' ~ as.POSIXct("2022-04-26 08:30:00", tz="GMT"),
            TRUE~as.POSIXct("2022-04-26 09:30:00", tz="GMT")
          )) %>%
@@ -315,7 +315,7 @@ Summary2Table <- htmlTable(SummaryByTypeTableStart[,2:6],
          spacer.celltype="double_cell",
           css.cell = css.cell.Ref)
 
-Equity <- MyData %>% filter(ProposedStart - minutes(30) == LeaveDT ) %>%
+Equity <- MyData %>% filter(ProposedStart - minutes(30) == LeaveDT | ProposedStart - minutes(40) == LeaveDT) %>%
   mutate(HighPoverty = `Preliminary.High.Poverty.Eligibility.for.SY.2020-21`,
          FRPL = `3.Year.Average.for.2020-21.Eligibility`)
 
