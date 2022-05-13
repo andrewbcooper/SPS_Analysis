@@ -134,6 +134,7 @@ server <- function(input, output,session) {
       mutate(Equity_var = case_when(
         input$equity_var == "FRPL" ~ get(input$equity_var),
         TRUE ~ get(input$equity_var)/Total.Students ),
+        Equity_var_nm = names(mychoices[which(mychoices == input$equity_var)]),
         Impact_var = get(input$impact_metric))
         })
   
@@ -188,6 +189,32 @@ server <- function(input, output,session) {
       theme_bw() + theme(text = element_text(size = 15)) 
   })
   
+  output$EquitySummaryGraph <- renderPlot({
+    silly3 <- EquityData() %>% 
+      mutate(T1_text = ordered(ifelse(Equity_var <= input$cutpoint/100, paste0("<=",input$cutpoint,.$Equity_var_nm[1]),paste0(">",input$cutpoint,.$Equity_var_nm[1])),
+                                      levels=c(paste0(">",input$cutpoint,.$Equity_var_nm[1]),paste0("<=",input$cutpoint,.$Equity_var_nm[1]))),
+             TimeShiftText = ifelse(TimeShift < 0,
+                                    paste(abs(TimeShift),"min earlier"),
+                                    paste(TimeShift,"min later"))) %>%
+      mutate(TimeShiftText = ordered(TimeShiftText,levels=TS_levels)) %>%
+      group_by(Type,T1_text,TimeShiftText,.drop=FALSE) %>% 
+      summarize(mycount=n()) %>% ungroup() %>%
+      group_by(Type,T1_text) %>%
+      mutate(mypercent=mycount/sum(mycount)) %>%
+      arrange(.,.by_group = TRUE)
+    
+    
+    silly3 %>% ggplot(aes(x=TimeShiftText,y=mypercent,fill=T1_text)) + geom_col(position='dodge') + 
+      facet_grid(~Type,scales='free_x') + theme_bw() +
+      scale_fill_manual(name = "School Grouping",drop=FALSE,values=c("#FF6633","#333333")) +
+      scale_x_discrete(name="Proposed Time Shift",drop=FALSE) +
+      scale_y_continuous(name = paste0("Percent of Schools by\n",EquityData()$Equity_var_nm[1]),labels=scales::percent_format()) +
+      theme(axis.text.x = element_text(angle = 45,hjust=1),text = element_text(size = 15))
+    
+  })
+  
+  output$HighPovGraph <- renderPlot(HighPovertySummary_plot)
+  output$TitleIGraph <- renderPlot(TitleISummary_plot)
   
   # For the Main page click
   output$click_info <- renderTable({
@@ -261,7 +288,7 @@ ui <- fluidPage(
          (1) The % of households departing for work prior to the propsed start time; and (2) the magnatidue of the change from the current start time to the proposed start time, measured in minutes.
          Negative values for the magnitude of change mean the proposed start time is earlier than the current start time.  Positive values mean the proposed start time is later than the current start time."),
       
-      h4("Full Data Tab:"),
+      h4("School-level Tab:"),
       
       h6("The table in the upper-left shows the percentage of households leaving for work by 7am, 8am, and 9am, grouped by the type of school"),
       h6("The table in the upper-right shows the percentage of households leaving for work by 7am, 8am, and 9am, grouped by the type of school and the proposed start time for those schools. 
@@ -283,6 +310,15 @@ ui <- fluidPage(
       h6("Users can click on single points or click-and-drag multiple points to get more information about the specific schools.
          The weighted-average values for the schools selected in the drop-down are automatically displayed."),
       
+      h4("Equity Summary Plots Tab:"),
+      
+      h6("These plots show how the proposed time shifts, and therefor disruptions, are distributed across schools.  
+         Each column is the percent of schools in that group whose bell times are proposed to change by X amount. 
+         The first plot compares those schools 
+         that were eligible for High Poverty LAP funding versus those that weren't.  The second plot compares 
+         Title I schools to non-Title I school.  Use the drop-downs below to pick additional equity metrics along
+         with the specific value of that measure to break schools into groups for comparison."),
+      
       br(),
       pickerInput("school_name", "Select a school",
                   AllSchools,
@@ -292,7 +328,7 @@ ui <- fluidPage(
                   )
       ),
       
-      pickerInput("impact_metric", "How to measure impact",
+      pickerInput("impact_metric", "How to measure impact for Equity Analysis",
                   myimpactmetric,
                   multiple=FALSE,selected=myimpactmetric[1],
                   options = pickerOptions(
@@ -307,6 +343,9 @@ ui <- fluidPage(
                     title = 'Click to see options'
                   )
       ),
+      
+      sliderInput("cutpoint","Select a % to Group Schools by Equity Measure for Equity Summary Plots",
+                  min=0,max=100,value=50),
 
       hr(),
       HTML("For non-option schools, the ACS data is linked to the Census Block Groups that lie within school's attendance area boundaries.  
@@ -328,7 +367,7 @@ ui <- fluidPage(
   ),
     mainPanel(
     tabsetPanel(type="tabs",
-            tabPanel("Full Data",
+            tabPanel("School-level Data",
 
       fluidRow(
         column(width=5,Summary1Table),
@@ -342,7 +381,12 @@ ui <- fluidPage(
                  plotOutput("equityGraph",height='600px',click="plot_click2",brush="plot_brush"),
                  h4("Click a point or click-and-drag to select multiple points for more information"),
                  tableOutput("click_info2")
-                 )
+                 ),
+      tabPanel("Equity Summary Plots",
+               plotOutput("HighPovGraph",height='250px'),
+               plotOutput("TitleIGraph",height='250px'),
+               plotOutput("EquitySummaryGraph",height='300px')
+               )
     
     ))
 

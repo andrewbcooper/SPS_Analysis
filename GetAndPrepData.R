@@ -321,7 +321,53 @@ Equity <- MyData %>% filter(ProposedStart - minutes(30) == LeaveDT | ProposedSta
 
 AllSchools <- sort(unique(MyData$Name))
 
-save(MyData,AllSchools,Summary1Table,Summary2Table,Equity,file="SPSApp/ForApp.RData")
+
+TS_levels <- sort(unique(Equity$TimeShift))
+TS_levels  <- ifelse(TS_levels  < 0,
+              paste(abs(TS_levels ),"min earlier"),
+              paste(TS_levels ,"min later"))
+
+TitleISummary <- Equity %>% 
+  mutate(T1_text = ordered(ifelse(Title1 == "No", "Not Title I","Title I"),levels=c("Title I","Not Title I")),
+         TimeShiftText = ifelse(TimeShift < 0,
+                                paste(abs(TimeShift),"min earlier"),
+                                paste(TimeShift,"min later"))) %>%
+  mutate(TimeShiftText = ordered(TimeShiftText,levels=TS_levels )) %>%
+  group_by(Type,T1_text,TimeShiftText,.drop=FALSE) %>% 
+  summarize(mycount=n()) %>% ungroup() %>%
+  group_by(Type,T1_text) %>%
+  mutate(mypercent=mycount/sum(mycount)) %>%
+  arrange(.,.by_group = TRUE)
+
+HighPovertySummary <- Equity %>% 
+  mutate(T1_text = ordered(ifelse(HighPoverty == "No", "Not eligible","Eligible for\nHigh Poverty LAP Funding"),levels=c("Eligible for\nHigh Poverty LAP Funding","Not eligible")),
+         TimeShiftText = ifelse(TimeShift < 0,
+                                paste(abs(TimeShift),"min earlier"),
+                                paste(TimeShift,"min later"))) %>%
+  mutate(TimeShiftText = ordered(TimeShiftText,levels=TS_levels )) %>%
+  group_by(Type,T1_text,TimeShiftText,.drop=FALSE) %>% 
+  summarize(mycount=n()) %>% ungroup() %>%
+  group_by(Type,T1_text) %>%
+  mutate(mypercent=mycount/sum(mycount)) %>%
+  arrange(.,.by_group = TRUE)
+
+
+TitleISummary_plot <- TitleISummary %>% ggplot(aes(x=TimeShiftText,y=mypercent,fill=T1_text)) + geom_col(position='dodge') + 
+  facet_grid(~Type,scales='free_x') + theme_bw() +
+  scale_fill_manual(name = "",drop=FALSE,values=c("#FF6633","#333333")) +
+  scale_x_discrete(name="",drop=FALSE) +
+  scale_y_continuous(name = "Percent of Schools by\nTitle I Status",labels=scales::percent_format()) +
+  theme(axis.text.x = element_text(angle = 45,hjust=1),text = element_text(size = 15)) 
+
+HighPovertySummary_plot <- HighPovertySummary %>% ggplot(aes(x=TimeShiftText,y=mypercent,fill=T1_text)) + geom_col(position='dodge') + 
+  facet_grid(~Type,scales='free_x') + theme_bw() +
+  scale_fill_manual(name = "",drop=FALSE,values=c("#FF6633","#333333")) +
+  scale_x_discrete(name="",drop=FALSE) +
+  scale_y_continuous(name = "Percent of Schools by\nEligibility for High Poverty\nLAP Funding",labels=scales::percent_format()) +
+  theme(axis.text.x = element_text(angle = 45,hjust=1),text = element_text(size = 15)) 
+
+
+save(MyData,AllSchools,Summary1Table,Summary2Table,Equity,TS_levels,HighPovertySummary_plot,TitleISummary_plot,file="SPSApp/ForApp.RData")
 write.csv2(MyData,file="SchoolsAndCensus.csv")
 write.csv2(Equity,file="JustSchools.csv")
 
